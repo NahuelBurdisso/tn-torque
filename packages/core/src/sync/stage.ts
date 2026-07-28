@@ -49,7 +49,16 @@ export async function stageProducts(
   sql: Db, runId: number, storeId: number, rows: RawProduct[],
 ): Promise<void> {
   if (!rows.length) return
-  const values = rows.map(p => ({
+
+  // Mismo caso que en stageVariants, y de hecho el más probable de los dos:
+  // /products es lo que TN pagina de verdad, así que un producto repetido
+  // entre páginas es la causa raíz — las variantes duplicadas en
+  // stageVariants son, la mayoría de las veces, un efecto derivado de esto.
+  // Mismo mecanismo y mismo criterio de desempate que ahí para que las dos
+  // funciones no diverjan sin motivo.
+  const deduped = [...new Map(rows.map(p => [p.id, p])).values()]
+
+  const values = deduped.map(p => ({
     run_id: runId,
     store_id: storeId,
     id: p.id,
