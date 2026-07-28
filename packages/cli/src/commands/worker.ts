@@ -37,7 +37,7 @@ async function runJob(
       configs.set(job.store_id, await loadStoreConfig(row!.slug))
     }
 
-    await mod.execute(job, { store: configs.get(job.store_id)!, now: () => new Date() })
+    await mod.execute(job, { store: configs.get(job.store_id)!, now: () => new Date(), sql })
     await complete(sql, job.id)
   } catch (err) {
     await fail(sql, job.id, String(err))

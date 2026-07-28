@@ -1,3 +1,4 @@
+import type { Db } from '@tnt/db'
 import type { StoreConfig } from '../config/store-config.ts'
 import type { Job, JobSpec } from '../queue/queue.ts'
 
@@ -13,9 +14,15 @@ export interface TntEvent {
   occurredAt: Date
 }
 
+/** Lo que ve handle(): ni base ni red. Sin sql acá, TypeScript rechaza cualquier await adentro. */
 export interface ModuleContext {
   store: StoreConfig
   now: () => Date
+}
+
+/** Lo que ve execute(): el único lugar con permiso para tener efectos. */
+export interface ExecuteContext extends ModuleContext {
+  sql: Db
   fetchImpl?: typeof fetch
 }
 
@@ -32,5 +39,5 @@ export interface TntModule {
    */
   handle(event: TntEvent, ctx: ModuleContext): JobSpec[]
   /** El único lugar con efectos. */
-  execute(job: Job, ctx: ModuleContext): Promise<void>
+  execute(job: Job, ctx: ExecuteContext): Promise<void>
 }

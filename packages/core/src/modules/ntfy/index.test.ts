@@ -1,6 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest'
+import { connect } from '@tnt/db'
 import { ntfyModule } from './index.ts'
-import type { TntEvent, ModuleContext } from '../types.ts'
+import type { TntEvent, ModuleContext, ExecuteContext } from '../types.ts'
+
+// execute() ahora exige sql en el contexto aunque ntfy no lo use: es el
+// mismo handle de test que usan los demás archivos, solo que acá no se
+// dispara ninguna query.
+const sql = connect(process.env.TNT_TEST_DATABASE_URL!)
+afterAll(async () => { await sql.end() })
 
 const ctx: ModuleContext = {
   store: {
@@ -12,6 +19,8 @@ const ctx: ModuleContext = {
   },
   now: () => new Date('2026-07-28T12:00:00Z'),
 }
+
+const execCtx: ExecuteContext = { ...ctx, sql }
 
 const event: TntEvent = {
   id: 500,
@@ -70,7 +79,7 @@ describe('ntfyModule.execute', () => {
     await ntfyModule.execute(
       { id: 1, store_id: 1, module: 'ntfy', kind: 'notify', state: 'running', attempts: 1,
         cancel_key: null, payload: { title: 'T', message: 'M' } },
-      { ...ctx, fetchImpl: f as unknown as typeof fetch })
+      { ...execCtx, fetchImpl: f as unknown as typeof fetch })
     expect(f).toHaveBeenCalledWith('https://ntfy.sh/tnt-test', expect.objectContaining({ method: 'POST', body: 'M' }))
   })
 
@@ -78,8 +87,8 @@ describe('ntfyModule.execute', () => {
     process.env.TNT_NTFY_URL = 'https://ntfy.sh'
     process.env.TNT_NTFY_TOPIC = 'topic-de-la-env'
     const f = vi.fn().mockResolvedValue(new Response('', { status: 200 }))
-    const storeCtx: ModuleContext = {
-      ...ctx,
+    const storeCtx: ExecuteContext = {
+      ...execCtx,
       store: { ...ctx.store, modules: { ntfy: { enabled: true, mode: 'auto', topic: 'topic-de-la-tienda' } } },
     }
     await ntfyModule.execute(
@@ -96,7 +105,7 @@ describe('ntfyModule.execute', () => {
     await expect(ntfyModule.execute(
       { id: 1, store_id: 1, module: 'ntfy', kind: 'notify', state: 'running', attempts: 1,
         cancel_key: null, payload: { title: 'T', message: 'M' } },
-      { ...ctx, fetchImpl: f as unknown as typeof fetch })).rejects.toThrow(/500/)
+      { ...execCtx, fetchImpl: f as unknown as typeof fetch })).rejects.toThrow(/500/)
   })
 
   it('lanza un error claro si no hay topic ni en la tienda ni en la env', async () => {
@@ -105,7 +114,7 @@ describe('ntfyModule.execute', () => {
     await expect(ntfyModule.execute(
       { id: 1, store_id: 1, module: 'ntfy', kind: 'notify', state: 'running', attempts: 1,
         cancel_key: null, payload: { title: 'T', message: 'M' } },
-      { ...ctx, fetchImpl: f as unknown as typeof fetch })).rejects.toThrow(/topic/)
+      { ...execCtx, fetchImpl: f as unknown as typeof fetch })).rejects.toThrow(/topic/)
     expect(f).not.toHaveBeenCalled()
   })
 })
