@@ -12,7 +12,7 @@ const ctx: ModuleContext = {
     store: { slug: 'demo', name: 'Demo', timezone: 'UTC', instance: 'torque-pc' },
     tiendanube: { store_id: STORE },
     sending: { dns_verified: false, daily_budget: 50 },
-    modules: {},
+    modules: { ntfy: { enabled: true, mode: 'auto' } },
     brand: {},
   },
   now: () => new Date(),
@@ -59,5 +59,22 @@ describe('dispatch', () => {
     await sql`INSERT INTO events (store_id, type, entity_type, entity_id, dedupe_key)
               VALUES (${STORE}, 'order.paid', 'order', 1, 'op1')`
     expect(await dispatch(sql, [ntfyModule], STORE, ctx)).toBe(0)
+  })
+
+  it('no despacha un módulo que la tienda tiene enabled = false', async () => {
+    await seedEvent(1)
+    const disabled: ModuleContext = {
+      ...ctx,
+      store: { ...ctx.store, modules: { ntfy: { enabled: false, mode: 'auto' } } },
+    }
+    expect(await dispatch(sql, [ntfyModule], STORE, disabled)).toBe(0)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM jobs WHERE module = 'ntfy'`
+    expect(row!.count).toBe(0)
+  })
+
+  it('no despacha un módulo ausente de [modules] (default enabled = false)', async () => {
+    await seedEvent(1)
+    const unconfigured: ModuleContext = { ...ctx, store: { ...ctx.store, modules: {} } }
+    expect(await dispatch(sql, [ntfyModule], STORE, unconfigured)).toBe(0)
   })
 })

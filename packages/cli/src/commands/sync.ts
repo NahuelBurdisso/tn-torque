@@ -1,7 +1,7 @@
 import { db, migrate } from '@tnt/db'
 import {
   loadStoreConfig, keyFromEnv, storeToken, TnClient, TokenBucket, syncVariants,
-  dispatch, ntfyModule, getStore,
+  dispatch, MODULE_REGISTRY, getStore,
 } from '@tnt/core'
 
 export async function sync(slug: string, opts: { json?: boolean }) {
@@ -21,7 +21,7 @@ export async function sync(slug: string, opts: { json?: boolean }) {
   })
 
   const stats = await syncVariants(sql, client, cfg.tiendanube.store_id)
-  const dispatched = await dispatch(sql, [ntfyModule], cfg.tiendanube.store_id, {
+  const dispatched = await dispatch(sql, MODULE_REGISTRY, cfg.tiendanube.store_id, {
     store: cfg, now: () => new Date(),
   })
 

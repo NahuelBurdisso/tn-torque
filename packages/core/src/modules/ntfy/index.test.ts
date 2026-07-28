@@ -63,7 +63,7 @@ describe('ntfyModule.execute', () => {
     else process.env.TNT_NTFY_TOPIC = origTopic
   })
 
-  it('postea al topic de ntfy', async () => {
+  it('postea al topic de ntfy tomado de la env cuando la tienda no configuró uno propio', async () => {
     process.env.TNT_NTFY_URL = 'https://ntfy.sh'
     process.env.TNT_NTFY_TOPIC = 'tnt-test'
     const f = vi.fn().mockResolvedValue(new Response('', { status: 200 }))
@@ -74,6 +74,22 @@ describe('ntfyModule.execute', () => {
     expect(f).toHaveBeenCalledWith('https://ntfy.sh/tnt-test', expect.objectContaining({ method: 'POST', body: 'M' }))
   })
 
+  it('el topic por tienda en [modules].ntfy le gana a la variable de entorno', async () => {
+    process.env.TNT_NTFY_URL = 'https://ntfy.sh'
+    process.env.TNT_NTFY_TOPIC = 'topic-de-la-env'
+    const f = vi.fn().mockResolvedValue(new Response('', { status: 200 }))
+    const storeCtx: ModuleContext = {
+      ...ctx,
+      store: { ...ctx.store, modules: { ntfy: { enabled: true, mode: 'auto', topic: 'topic-de-la-tienda' } } },
+    }
+    await ntfyModule.execute(
+      { id: 1, store_id: 1, module: 'ntfy', kind: 'notify', state: 'running', attempts: 1,
+        cancel_key: null, payload: { title: 'T', message: 'M' } },
+      { ...storeCtx, fetchImpl: f as unknown as typeof fetch })
+    expect(f).toHaveBeenCalledWith(
+      'https://ntfy.sh/topic-de-la-tienda', expect.objectContaining({ method: 'POST', body: 'M' }))
+  })
+
   it('lanza si ntfy devuelve error, para que la cola reintente', async () => {
     process.env.TNT_NTFY_TOPIC = 'tnt-test'
     const f = vi.fn().mockResolvedValue(new Response('nope', { status: 500 }))
@@ -81,5 +97,15 @@ describe('ntfyModule.execute', () => {
       { id: 1, store_id: 1, module: 'ntfy', kind: 'notify', state: 'running', attempts: 1,
         cancel_key: null, payload: { title: 'T', message: 'M' } },
       { ...ctx, fetchImpl: f as unknown as typeof fetch })).rejects.toThrow(/500/)
+  })
+
+  it('lanza un error claro si no hay topic ni en la tienda ni en la env', async () => {
+    delete process.env.TNT_NTFY_TOPIC
+    const f = vi.fn()
+    await expect(ntfyModule.execute(
+      { id: 1, store_id: 1, module: 'ntfy', kind: 'notify', state: 'running', attempts: 1,
+        cancel_key: null, payload: { title: 'T', message: 'M' } },
+      { ...ctx, fetchImpl: f as unknown as typeof fetch })).rejects.toThrow(/topic/)
+    expect(f).not.toHaveBeenCalled()
   })
 })

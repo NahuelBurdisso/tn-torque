@@ -1,7 +1,5 @@
 import { db, migrate } from '@tnt/db'
-import { loadStoreConfig, tick, complete, fail, recoverRunning, ntfyModule, type Job } from '@tnt/core'
-
-const MODULES = { ntfy: ntfyModule }
+import { loadStoreConfig, tick, complete, fail, recoverRunning, MODULES_BY_NAME, type Job } from '@tnt/core'
 
 export async function worker(opts: { once?: boolean; interval?: string }) {
   const sql = db()
@@ -31,7 +29,7 @@ async function runJob(
   configs: Map<number, Awaited<ReturnType<typeof loadStoreConfig>>>,
 ) {
   try {
-    const mod = MODULES[job.module as keyof typeof MODULES]
+    const mod = MODULES_BY_NAME[job.module]
     if (!mod) throw new Error(`módulo desconocido: ${job.module}`)
 
     if (!configs.has(job.store_id)) {

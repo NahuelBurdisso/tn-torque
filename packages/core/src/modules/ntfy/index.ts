@@ -25,9 +25,21 @@ export const ntfyModule: TntModule = {
   },
 
   async execute(job, ctx) {
-    const base = process.env.TNT_NTFY_URL ?? 'https://ntfy.sh'
-    const topic = process.env.TNT_NTFY_TOPIC
-    if (!topic) throw new Error('TNT_NTFY_TOPIC no está definida')
+    // El valor por tienda en [modules].ntfy le gana a la variable de entorno:
+    // con dos tiendas configuradas, cada una tiene que poder mandar sus
+    // notificaciones a un topic distinto. La env queda como fallback para
+    // no romper instalaciones de una sola tienda que todavía no migraron.
+    const modCfg = ctx.store.modules.ntfy
+    const storeTopic = typeof modCfg?.topic === 'string' ? modCfg.topic : undefined
+    const storeUrl = typeof modCfg?.url === 'string' ? modCfg.url : undefined
+
+    const base = storeUrl ?? process.env.TNT_NTFY_URL ?? 'https://ntfy.sh'
+    const topic = storeTopic ?? process.env.TNT_NTFY_TOPIC
+    if (!topic) {
+      throw new Error(
+        `no hay topic de ntfy para "${ctx.store.store.slug}": configurá modules.ntfy.topic ` +
+        `en su store.toml o definí TNT_NTFY_TOPIC`)
+    }
 
     const { title, message } = job.payload as { title: string; message: string }
     const res = await (ctx.fetchImpl ?? fetch)(`${base}/${topic}`, {

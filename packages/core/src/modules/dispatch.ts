@@ -20,11 +20,13 @@ interface EventRow {
  * Devuelve la cantidad de eventos despachados.
  */
 export async function dispatch(
-  sql: Db, modules: TntModule[], storeId: number, ctx: ModuleContext,
+  sql: Db, modules: readonly TntModule[], storeId: number, ctx: ModuleContext,
 ): Promise<number> {
   let total = 0
 
   for (const mod of modules) {
+    if (!isModuleEnabled(ctx, mod.name)) continue
+
     const locked = (mod.requires ?? []).filter(flag => !isUnlocked(ctx, flag))
     if (locked.length) continue
 
@@ -74,4 +76,14 @@ export async function markAllDelivered(sql: Db, storeId: number, module: string)
 
 function isUnlocked(ctx: ModuleContext, flag: string): boolean {
   return (ctx.store.sending as Record<string, unknown>)[flag] === true
+}
+
+/**
+ * Un módulo corre solo si la tienda lo prendió a mano en su [modules].
+ * Ausente o `enabled = false` (el default del schema) es lo mismo que "no":
+ * config que no dice nada, no arranca nada — mismo criterio que
+ * dns_verified y el resto de los defaults que fallan cerrado.
+ */
+function isModuleEnabled(ctx: ModuleContext, name: string): boolean {
+  return ctx.store.modules[name]?.enabled === true
 }
