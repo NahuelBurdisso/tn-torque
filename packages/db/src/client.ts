@@ -1,6 +1,15 @@
-import postgres, { type Sql } from 'postgres'
+import postgres, { type Sql, type TransactionSql } from 'postgres'
 
 export type Db = Sql<{}>
+
+/**
+ * Lo que aceptan las funciones que pueden correr sueltas o adentro de
+ * `sql.begin()`. `TransactionSql` no es asignable a `Db` — le faltan `end`,
+ * `begin` y el resto de lo que solo tiene sentido a nivel de conexión — así
+ * que una función que solo hace queries y quiere poder recibir el `tx` de
+ * una transacción declara este tipo en vez de `Db`.
+ */
+export type Queryable = Db | TransactionSql<{}>
 
 /**
  * Tipo exacto que espera `sql.json()`. postgres.js no lo exporta a nivel de

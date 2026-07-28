@@ -34,20 +34,21 @@ const event: TntEvent = {
 
 describe('ntfyModule.handle', () => {
   it('es puro: devuelve un trabajo sin tocar la red', () => {
-    const jobs = ntfyModule.handle(event, ctx)
+    const { enqueue: jobs, cancel } = ntfyModule.handle(event, ctx)
     expect(jobs).toHaveLength(1)
     expect(jobs[0]!.module).toBe('ntfy')
     expect(jobs[0]!.dedupeKey).toBe('ntfy:1:500')
     expect(jobs[0]!.cancelKey).toBe('store:demo')
     expect(String(jobs[0]!.payload?.message)).toContain('98765')
+    expect(cancel).toBeUndefined()
   })
 
   it('programa el trabajo para ahora', () => {
-    expect(ntfyModule.handle(event, ctx)[0]!.runAt).toEqual(new Date('2026-07-28T12:00:00Z'))
+    expect(ntfyModule.handle(event, ctx).enqueue[0]!.runAt).toEqual(new Date('2026-07-28T12:00:00Z'))
   })
 
   it('ignora eventos que no escucha', () => {
-    expect(ntfyModule.handle({ ...event, type: 'order.paid' }, ctx)).toEqual([])
+    expect(ntfyModule.handle({ ...event, type: 'order.paid' }, ctx).enqueue).toEqual([])
   })
 })
 

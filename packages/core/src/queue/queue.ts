@@ -1,4 +1,4 @@
-import type { Db, Json } from '@tnt/db'
+import type { Db, Queryable, Json } from '@tnt/db'
 
 export const MAX_ATTEMPTS = 5
 
@@ -26,7 +26,7 @@ export interface Job {
 }
 
 /** Devuelve el id, o null si la dedupe_key ya existía. */
-export async function enqueue(sql: Db, spec: JobSpec): Promise<number | null> {
+export async function enqueue(sql: Queryable, spec: JobSpec): Promise<number | null> {
   const [row] = await sql<{ id: string }[]>`
     INSERT INTO jobs (store_id, batch_id, module, kind, run_at, dedupe_key, cancel_key, payload, state)
     VALUES (${spec.storeId}, ${spec.batchId ?? null}, ${spec.module}, ${spec.kind},
@@ -72,7 +72,7 @@ export async function fail(sql: Db, id: number, error: string): Promise<void> {
 }
 
 /** Un solo hecho mata todos los trabajos pendientes que vuelve obsoletos. */
-export async function cancelByKey(sql: Db, cancelKey: string): Promise<number> {
+export async function cancelByKey(sql: Queryable, cancelKey: string): Promise<number> {
   const rows = await sql`
     UPDATE jobs SET state = 'cancelled', updated_at = now()
     WHERE cancel_key = ${cancelKey} AND state IN ('pending','needs_approval')

@@ -8,20 +8,22 @@ export const ntfyModule: TntModule = {
   subscribes: SUBSCRIBES,
 
   handle(event, ctx) {
-    if (!SUBSCRIBES.includes(event.type)) return []
+    if (!SUBSCRIBES.includes(event.type)) return { enqueue: [] }
     const { old_stock, new_stock, product_id } = event.payload as Record<string, unknown>
-    return [{
-      storeId: event.storeId,
-      module: 'ntfy',
-      kind: 'notify',
-      runAt: ctx.now(),
-      dedupeKey: deliveryKey('ntfy', event.storeId, event.id),
-      cancelKey: `store:${ctx.store.store.slug}`,
-      payload: {
-        title: `${ctx.store.store.name}: volvió el stock`,
-        message: `Variante ${event.entityId} (producto ${product_id}) pasó de ${old_stock} a ${new_stock}`,
-      },
-    }]
+    return {
+      enqueue: [{
+        storeId: event.storeId,
+        module: 'ntfy',
+        kind: 'notify',
+        runAt: ctx.now(),
+        dedupeKey: deliveryKey('ntfy', event.storeId, event.id),
+        cancelKey: `store:${ctx.store.store.slug}`,
+        payload: {
+          title: `${ctx.store.store.name}: volvió el stock`,
+          message: `Variante ${event.entityId} (producto ${product_id}) pasó de ${old_stock} a ${new_stock}`,
+        },
+      }],
+    }
   },
 
   async execute(job, ctx) {

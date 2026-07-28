@@ -12,4 +12,4 @@ export { enqueue, tick, complete, fail, cancelByKey, recoverRunning, MAX_ATTEMPT
 export { dispatch, markAllDelivered } from './modules/dispatch.ts'
 export { ntfyModule } from './modules/ntfy/index.ts'
 export { MODULE_REGISTRY, MODULES_BY_NAME } from './modules/registry.ts'
-export type { TntModule, TntEvent, ModuleContext, ExecuteContext } from './modules/types.ts'
+export type { TntModule, TntEvent, ModuleContext, ExecuteContext, HandleResult } from './modules/types.ts'

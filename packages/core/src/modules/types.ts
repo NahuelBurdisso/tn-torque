@@ -26,6 +26,16 @@ export interface ExecuteContext extends ModuleContext {
   fetchImpl?: typeof fetch
 }
 
+/**
+ * Lo que handle() devuelve: las dos intenciones que puede expresar sobre la
+ * cola, calculadas puro. dispatch() es quien las ejecuta.
+ */
+export interface HandleResult {
+  enqueue: JobSpec[]
+  /** cancel_key a matar. Opcional: la mayoría de los módulos solo encolan. */
+  cancel?: string[]
+}
+
 export interface TntModule {
   name: string
   /** Tipos de evento que consume. El despachador filtra por esto. */
@@ -37,7 +47,7 @@ export interface TntModule {
    * Recibe un evento y devuelve qué haría. Eso es lo que hace que los tests
    * sean funciones puras y que el modo aprobación salga gratis.
    */
-  handle(event: TntEvent, ctx: ModuleContext): JobSpec[]
+  handle(event: TntEvent, ctx: ModuleContext): HandleResult
   /** El único lugar con efectos. */
   execute(job: Job, ctx: ExecuteContext): Promise<void>
 }

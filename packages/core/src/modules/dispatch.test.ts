@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 import { connect, migrate } from '@tnt/db'
 import { dispatch, markAllDelivered } from './dispatch.ts'
 import { ntfyModule } from './ntfy/index.ts'
-import type { ModuleContext } from './types.ts'
+import { enqueue } from '../queue/queue.ts'
+import type { ModuleContext, TntModule } from './types.ts'
 
 const sql = connect(process.env.TNT_TEST_DATABASE_URL!)
 const STORE = 1
@@ -76,5 +77,117 @@ describe('dispatch', () => {
     await seedEvent(1)
     const unconfigured: ModuleContext = { ...ctx, store: { ...ctx.store, modules: {} } }
     expect(await dispatch(sql, [ntfyModule], STORE, unconfigured)).toBe(0)
+  })
+})
+
+// A partir de acá: handle() puede devolver `cancel` además de `enqueue`.
+// post-purchase modela order.paid matando el carrito y arrancando su propia
+// secuencia bajo la MISMA cancel_key que acaba de matar — el caso que prueba
+// que el orden (cancelar antes de encolar) no se come su propio trabajo nuevo.
+const CART_CANCEL_KEY = 'mail:cart:demo:x@y.com'
+
+const postPurchaseModule: TntModule = {
+  name: 'post-purchase',
+  subscribes: ['order.paid'],
+  handle(event, ctx) {
+    return {
+      enqueue: [{
+        storeId: event.storeId,
+        module: 'post-purchase',
+        kind: 'thank-you',
+        runAt: ctx.now(),
+        dedupeKey: `post-purchase:${event.storeId}:${event.entityId}`,
+        cancelKey: CART_CANCEL_KEY,
+      }],
+      cancel: [CART_CANCEL_KEY],
+    }
+  },
+  async execute() {},
+}
+
+// Mismo handle() que postPurchaseModule, pero el JobSpec apunta a una tienda
+// que no existe: el INSERT viola la FK de jobs.store_id y tira la excepción
+// que fuerza el rollback de la transacción entera.
+const brokenPostPurchaseModule: TntModule = {
+  name: 'broken-post-purchase',
+  subscribes: ['order.paid'],
+  handle(event, ctx) {
+    return {
+      enqueue: [{
+        storeId: 999999,
+        module: 'broken-post-purchase',
+        kind: 'thank-you',
+        runAt: ctx.now(),
+        dedupeKey: `broken-post-purchase:${event.entityId}`,
+      }],
+      cancel: [CART_CANCEL_KEY],
+    }
+  },
+  async execute() {},
+}
+
+async function seedCartJob(dedupeKey = 'cart-step-2') {
+  await enqueue(sql, {
+    storeId: STORE,
+    module: 'mail',
+    kind: 'cart-2',
+    runAt: new Date(Date.now() - 1000),
+    dedupeKey,
+    cancelKey: CART_CANCEL_KEY,
+  })
+}
+
+async function seedOrderPaid() {
+  await sql`
+    INSERT INTO events (store_id, type, entity_type, entity_id, payload, dedupe_key)
+    VALUES (${STORE}, 'order.paid', 'order', 1, ${sql.json({ email: 'x@y.com' })}, 'order-paid-1')`
+}
+
+describe('dispatch — handle() con cancel', () => {
+  it('cancela los trabajos pendientes que matchean la cancel_key devuelta', async () => {
+    await seedCartJob()
+    await seedOrderPaid()
+    const cancelCtx: ModuleContext = {
+      ...ctx, store: { ...ctx.store, modules: { 'post-purchase': { enabled: true, mode: 'auto' } } },
+    }
+    await dispatch(sql, [postPurchaseModule], STORE, cancelCtx)
+
+    const [cart] = await sql`SELECT state FROM jobs WHERE dedupe_key = 'cart-step-2'`
+    expect(cart!.state).toBe('cancelled')
+  })
+
+  it('cancela y encola en la misma llamada: el trabajo nuevo sobrevive aunque comparta cancel_key', async () => {
+    await seedCartJob()
+    await seedOrderPaid()
+    const cancelCtx: ModuleContext = {
+      ...ctx, store: { ...ctx.store, modules: { 'post-purchase': { enabled: true, mode: 'auto' } } },
+    }
+    await dispatch(sql, [postPurchaseModule], STORE, cancelCtx)
+
+    const [cart] = await sql`SELECT state FROM jobs WHERE dedupe_key = 'cart-step-2'`
+    expect(cart!.state).toBe('cancelled')
+
+    const [fresh] = await sql`SELECT state, cancel_key FROM jobs WHERE dedupe_key = 'post-purchase:1:1'`
+    expect(fresh!.state).toBe('pending')
+    expect(fresh!.cancel_key).toBe(CART_CANCEL_KEY)
+  })
+
+  it('cancelar + encolar + marcar la entrega son atómicos: si encolar falla, no queda nada a medio aplicar', async () => {
+    await seedCartJob()
+    await seedOrderPaid()
+    const brokenCtx: ModuleContext = {
+      ...ctx, store: { ...ctx.store, modules: { 'broken-post-purchase': { enabled: true, mode: 'auto' } } },
+    }
+
+    await expect(dispatch(sql, [brokenPostPurchaseModule], STORE, brokenCtx)).rejects.toThrow()
+
+    // La cancelación se deshizo: el carrito sigue pendiente, no cancelado a medias.
+    const [cart] = await sql`SELECT state FROM jobs WHERE dedupe_key = 'cart-step-2'`
+    expect(cart!.state).toBe('pending')
+
+    // La entrega no quedó marcada: un dispatch posterior va a reintentar este evento
+    // en vez de darlo por perdido.
+    const deliveries = await sql`SELECT * FROM event_deliveries WHERE module = 'broken-post-purchase'`
+    expect(deliveries).toHaveLength(0)
   })
 })

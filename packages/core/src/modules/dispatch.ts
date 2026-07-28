@@ -1,6 +1,6 @@
 import type { Db } from '@tnt/db'
 import type { TntModule, TntEvent, ModuleContext } from './types.ts'
-import { enqueue } from '../queue/queue.ts'
+import { enqueue, cancelByKey } from '../queue/queue.ts'
 
 const BATCH = 500
 
@@ -49,11 +49,24 @@ export async function dispatch(
         payload: row.payload,
         occurredAt: row.occurred_at,
       }
-      for (const spec of mod.handle(event, ctx)) await enqueue(sql, spec)
-      await sql`
-        INSERT INTO event_deliveries (event_id, module, status)
-        VALUES (${event.id}, ${mod.name}, 'delivered')
-        ON CONFLICT (event_id, module) DO UPDATE SET status = 'delivered', updated_at = now()`
+      const { enqueue: specs, cancel } = mod.handle(event, ctx)
+
+      // Cancelar, encolar y marcar la entrega van en UNA transacción: si el
+      // proceso muere a mitad de camino no puede quedar una secuencia vieja
+      // muerta sin la nueva creada, ni una entrega marcada sin que sus
+      // efectos hayan corrido (event_deliveries es el puntero de este
+      // módulo — una vez marcado, ese evento no se vuelve a mirar).
+      // Cancelar ANTES de encolar: un módulo puede cancelar y re-encolar bajo
+      // la misma cancel_key en la misma llamada, y el trabajo nuevo tiene que
+      // sobrevivir en vez de ser víctima de la cancelación pensada para el viejo.
+      await sql.begin(async tx => {
+        for (const key of cancel ?? []) await cancelByKey(tx, key)
+        for (const spec of specs) await enqueue(tx, spec)
+        await tx`
+          INSERT INTO event_deliveries (event_id, module, status)
+          VALUES (${event.id}, ${mod.name}, 'delivered')
+          ON CONFLICT (event_id, module) DO UPDATE SET status = 'delivered', updated_at = now()`
+      })
       total++
     }
   }
