@@ -1,0 +1,18 @@
+[store]
+slug     = "demo"
+name     = "TNT Demo"
+timezone = "America/Argentina/Cordoba"
+instance = "torque-pc"
+
+[tiendanube]
+store_id = 0   # ← poner el store_id real de la tienda demo
+
+[sending]
+dns_verified = false
+daily_budget = 50
+
+[modules]
+ntfy = { enabled = true, mode = "auto" }
+
+[brand]
+primary = "#2A211A"
