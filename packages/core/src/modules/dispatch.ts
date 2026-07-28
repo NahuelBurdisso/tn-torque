@@ -1,0 +1,77 @@
+import type { Db } from '@tnt/db'
+import type { TntModule, TntEvent, ModuleContext } from './types.ts'
+import { enqueue } from '../queue/queue.ts'
+
+const BATCH = 500
+
+interface EventRow {
+  id: string
+  store_id: string
+  type: string
+  entity_type: string
+  entity_id: string
+  payload: Record<string, unknown>
+  occurred_at: Date
+}
+
+/**
+ * Bus: por cada módulo, toma los eventos que todavía no le fueron entregados,
+ * corre su handle() puro, encola lo que devuelva y marca la entrega.
+ * Devuelve la cantidad de eventos despachados.
+ */
+export async function dispatch(
+  sql: Db, modules: TntModule[], storeId: number, ctx: ModuleContext,
+): Promise<number> {
+  let total = 0
+
+  for (const mod of modules) {
+    const locked = (mod.requires ?? []).filter(flag => !isUnlocked(ctx, flag))
+    if (locked.length) continue
+
+    const rows = await sql<EventRow[]>`
+      SELECT e.* FROM events e
+      LEFT JOIN event_deliveries d ON d.event_id = e.id AND d.module = ${mod.name}
+      WHERE e.store_id = ${storeId}
+        AND e.type = ANY(${mod.subscribes})
+        AND d.event_id IS NULL
+      ORDER BY e.id
+      LIMIT ${BATCH}`
+
+    for (const row of rows) {
+      const event: TntEvent = {
+        id: Number(row.id),
+        storeId: Number(row.store_id),
+        type: row.type,
+        entityType: row.entity_type,
+        entityId: Number(row.entity_id),
+        payload: row.payload,
+        occurredAt: row.occurred_at,
+      }
+      for (const spec of mod.handle(event, ctx)) await enqueue(sql, spec)
+      await sql`
+        INSERT INTO event_deliveries (event_id, module, status)
+        VALUES (${event.id}, ${mod.name}, 'delivered')
+        ON CONFLICT (event_id, module) DO UPDATE SET status = 'delivered', updated_at = now()`
+      total++
+    }
+  }
+
+  return total
+}
+
+/**
+ * Marca todos los eventos existentes como entregados para un módulo.
+ * Es cómo se activa un módulo meses después sin reprocesar el historial.
+ */
+export async function markAllDelivered(sql: Db, storeId: number, module: string): Promise<number> {
+  const rows = await sql`
+    INSERT INTO event_deliveries (event_id, module, status)
+    SELECT id, ${module}, 'skipped' FROM events WHERE store_id = ${storeId}
+    ON CONFLICT (event_id, module) DO NOTHING
+    RETURNING event_id`
+  return rows.length
+}
+
+function isUnlocked(ctx: ModuleContext, flag: string): boolean {
+  return (ctx.store.sending as Record<string, unknown>)[flag] === true
+}
