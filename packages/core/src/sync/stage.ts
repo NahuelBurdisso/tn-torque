@@ -20,7 +20,18 @@ export async function stageVariants(
   sql: Db, runId: number, storeId: number, rows: RawVariant[],
 ): Promise<void> {
   if (!rows.length) return
-  const values = rows.map(v => ({
+
+  // TN pagina /products por número de página, no por cursor estable: si el
+  // catálogo cambia mientras se pagina, una fila puede repetirse en dos
+  // páginas. Sin esto, dos filas para el mismo id llegan a stage_variants y
+  // el ON CONFLICT DO UPDATE del upsert en applyVariants aborta el apply
+  // entero. Se deduplica acá, no en el INSERT, porque el conflicto real es
+  // "misma variante vista dos veces en esta corrida" — un problema de la
+  // corrida, no de la tabla. Gana la última ocurrencia: en una lista
+  // paginada en orden, es la lectura más reciente del recurso.
+  const deduped = [...new Map(rows.map(v => [v.id, v])).values()]
+
+  const values = deduped.map(v => ({
     run_id: runId,
     store_id: storeId,
     id: v.id,
