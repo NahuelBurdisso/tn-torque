@@ -44,7 +44,18 @@ export async function applyVariants(
 ): Promise<SyncStats> {
   const emitEvents = mode !== 'backfill'
 
-  const [row] = await sql<{ rows_seen: string; rows_changed: string; events_emitted: string }[]>`
+  // Serializa applies concurrentes de la MISMA tienda. Sin esto, dos syncs
+  // solapados (cron que se pisa con una corrida manual, por ejemplo) pueden
+  // leer el mismo estado viejo del espejo bajo READ COMMITTED y las dos
+  // insertan su propio snapshot -> dos dedupe_key distintas -> dos eventos
+  // para una sola transición real. pg_advisory_xact_lock necesita vivir
+  // adentro de una transacción explícita: si fuera un SELECT suelto, su
+  // propia transacción implícita terminaría (y liberaría el lock) antes de
+  // que corra el CTE de abajo.
+  return sql.begin(async tx => {
+    await tx`SELECT pg_advisory_xact_lock(${storeId})`
+
+    const [row] = await tx<{ rows_seen: string; rows_changed: string; events_emitted: string }[]>`
     WITH changed AS MATERIALIZED (
       SELECT s.id, s.store_id, s.product_id, s.stock,
              v.stock       AS old_stock,
@@ -107,13 +118,14 @@ export async function applyVariants(
       (SELECT count(*) FROM changed)                                AS rows_changed,
       (SELECT count(*) FROM emitted)                                AS events_emitted`
 
-  await sql`DELETE FROM stage_variants WHERE run_id = ${runId}`
+    await tx`DELETE FROM stage_variants WHERE run_id = ${runId}`
 
-  return {
-    rowsSeen: Number(row!.rows_seen),
-    rowsChanged: Number(row!.rows_changed),
-    eventsEmitted: Number(row!.events_emitted),
-  }
+    return {
+      rowsSeen: Number(row!.rows_seen),
+      rowsChanged: Number(row!.rows_changed),
+      eventsEmitted: Number(row!.events_emitted),
+    }
+  })
 }
 
 export async function applyProducts(sql: Db, runId: number, storeId: number): Promise<number> {
