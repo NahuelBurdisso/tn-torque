@@ -35,8 +35,8 @@ describe('syncVariants', () => {
     const stats = await syncVariants(sql, client, STORE)
     expect(stats.mode).toBe('backfill')
     expect(stats.eventsEmitted).toBe(0)
-    const [{ count }] = await sql`SELECT count(*)::int AS count FROM variants`
-    expect(count).toBe(1)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM variants`
+    expect(row!.count).toBe(1)
   })
 
   it('marca backfilled_at para que el siguiente sync sea incremental', async () => {
@@ -58,7 +58,7 @@ describe('syncVariants', () => {
     ])
     const stats = await syncVariants(sql, client, STORE)
     expect(stats.rowsSeen).toBe(3)
-    const [{ count }] = await sql`SELECT count(*)::int AS count FROM products`
-    expect(count).toBe(2)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM products`
+    expect(row!.count).toBe(2)
   })
 })

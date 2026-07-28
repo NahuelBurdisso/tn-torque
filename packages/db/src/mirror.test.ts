@@ -49,7 +49,7 @@ describe('columnas generadas', () => {
   it('borrar la tienda borra su espejo en cascada', async () => {
     await sql`INSERT INTO products (store_id, id, raw) VALUES (1, 10, '{}'::jsonb)`
     await sql`DELETE FROM stores WHERE id = 1`
-    const [{ count }] = await sql`SELECT count(*)::int AS count FROM products`
-    expect(count).toBe(0)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM products`
+    expect(row!.count).toBe(0)
   })
 })

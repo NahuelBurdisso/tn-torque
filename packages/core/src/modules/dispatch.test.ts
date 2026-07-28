@@ -37,8 +37,8 @@ describe('dispatch', () => {
     await seedEvent(1); await seedEvent(2)
     const n = await dispatch(sql, [ntfyModule], STORE, ctx)
     expect(n).toBe(2)
-    const [{ count }] = await sql`SELECT count(*)::int AS count FROM jobs WHERE module = 'ntfy'`
-    expect(count).toBe(2)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM jobs WHERE module = 'ntfy'`
+    expect(row!.count).toBe(2)
   })
 
   it('no vuelve a despachar lo ya entregado', async () => {
@@ -51,8 +51,8 @@ describe('dispatch', () => {
     await seedEvent(1); await seedEvent(2)
     await markAllDelivered(sql, STORE, 'ntfy')
     expect(await dispatch(sql, [ntfyModule], STORE, ctx)).toBe(0)
-    const [{ count }] = await sql`SELECT count(*)::int AS count FROM jobs`
-    expect(count).toBe(0)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM jobs`
+    expect(row!.count).toBe(0)
   })
 
   it('ignora eventos de tipos que el módulo no escucha', async () => {

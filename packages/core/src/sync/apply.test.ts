@@ -32,16 +32,16 @@ describe('applyVariants', () => {
     const stats = await runSync([variant(100, 0), variant(101, 5), variant(102, 0)], 'backfill')
     expect(stats.rowsSeen).toBe(3)
     expect(stats.eventsEmitted).toBe(0)
-    const [{ count }] = await sql`SELECT count(*)::int AS count FROM events`
-    expect(count).toBe(0)
-    const [{ count: variants }] = await sql`SELECT count(*)::int AS count FROM variants`
-    expect(variants).toBe(3)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM events`
+    expect(row!.count).toBe(0)
+    const [variantsRow] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM variants`
+    expect(variantsRow!.count).toBe(3)
   })
 
   it('el backfill escribe una fila baseline de snapshot por variante', async () => {
     await runSync([variant(100, 0), variant(101, 5)], 'backfill')
-    const [{ count }] = await sql`SELECT count(*)::int AS count FROM variant_snapshots`
-    expect(count).toBe(2)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM variant_snapshots`
+    expect(row!.count).toBe(2)
   })
 
   it('ARRANQUE EN FRÍO: un catálogo entero agotado no dispara nada', async () => {
@@ -49,8 +49,8 @@ describe('applyVariants', () => {
     const inStock = Array.from({ length: 37 }, (_, i) => variant(300 + i, 4))
     const stats = await runSync([...soldOut, ...inStock], 'backfill')
     expect(stats.eventsEmitted).toBe(0)
-    const [{ count }] = await sql`SELECT count(*)::int AS count FROM events`
-    expect(count).toBe(0)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM events`
+    expect(row!.count).toBe(0)
   })
 
   it('emite back_in_stock cuando el stock pasa de 0 a positivo', async () => {
@@ -93,8 +93,8 @@ describe('applyVariants', () => {
     const stats = await runSync([variant(100, 5)], 'incremental')
     expect(stats.rowsChanged).toBe(0)
     expect(stats.eventsEmitted).toBe(0)
-    const [{ count }] = await sql`SELECT count(*)::int AS count FROM variant_snapshots`
-    expect(count).toBe(1)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM variant_snapshots`
+    expect(row!.count).toBe(1)
   })
 
   it('un cambio de precio escribe snapshot pero no emite back_in_stock', async () => {
@@ -110,8 +110,8 @@ describe('applyVariants', () => {
     const second = await runSync([variant(100, 3)], 'incremental')
     expect(first.eventsEmitted).toBe(1)
     expect(second.eventsEmitted).toBe(0)
-    const [{ count }] = await sql`SELECT count(*)::int AS count FROM events`
-    expect(count).toBe(1)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM events`
+    expect(row!.count).toBe(1)
   })
 
   it('registra la corrida en sync_runs', async () => {
@@ -124,7 +124,7 @@ describe('applyVariants', () => {
 
   it('limpia el staging después de aplicar', async () => {
     await runSync([variant(100, 0)], 'backfill')
-    const [{ count }] = await sql`SELECT count(*)::int AS count FROM stage_variants`
-    expect(count).toBe(0)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM stage_variants`
+    expect(row!.count).toBe(0)
   })
 })

@@ -48,7 +48,7 @@ export class TnClient {
     let url: string | undefined = this.url(path, { per_page: '200', ...params })
     const out: T[] = []
     while (url) {
-      const { data, next } = await this.raw<T[]>('GET', url, undefined)
+      const { data, next }: { data: T[]; next?: string } = await this.raw<T[]>('GET', url, undefined)
       out.push(...data)
       url = next
     }

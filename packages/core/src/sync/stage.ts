@@ -1,4 +1,4 @@
-import type { Db } from '@tnt/db'
+import type { Db, Json } from '@tnt/db'
 
 /** Forma cruda de una variante tal como la devuelve la API de TN. */
 export interface RawVariant {
@@ -27,7 +27,7 @@ export async function stageVariants(
     product_id: v.product_id,
     // sql.json es obligatorio: en un insert multi-fila postgres.js no conoce
     // el tipo de la columna y mandaría el objeto como texto plano.
-    raw: sql.json(v as unknown as object),
+    raw: sql.json(v as unknown as Json),
     stock: v.stock ?? null,
     tn_updated_at: v.updated_at ?? null,
   }))
@@ -42,7 +42,7 @@ export async function stageProducts(
     run_id: runId,
     store_id: storeId,
     id: p.id,
-    raw: sql.json(p as unknown as object),
+    raw: sql.json(p as unknown as Json),
     tn_updated_at: p.updated_at ?? null,
   }))
   await sql`INSERT INTO stage_products ${sql(values, 'run_id', 'store_id', 'id', 'raw', 'tn_updated_at')}`

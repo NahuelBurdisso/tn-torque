@@ -41,8 +41,8 @@ describe('queue', () => {
   it('la dedupe_key impide encolar dos veces', async () => {
     expect(await enqueue(sql, spec())).not.toBeNull()
     expect(await enqueue(sql, spec())).toBeNull()
-    const [{ count }] = await sql`SELECT count(*)::int AS count FROM jobs`
-    expect(count).toBe(1)
+    const [row] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM jobs`
+    expect(row!.count).toBe(1)
   })
 
   it('un segundo tick no vuelve a levantar el mismo trabajo', async () => {

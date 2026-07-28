@@ -1,4 +1,4 @@
-import type { Db } from '@tnt/db'
+import type { Db, Json } from '@tnt/db'
 
 export const MAX_ATTEMPTS = 5
 
@@ -31,7 +31,7 @@ export async function enqueue(sql: Db, spec: JobSpec): Promise<number | null> {
     INSERT INTO jobs (store_id, batch_id, module, kind, run_at, dedupe_key, cancel_key, payload, state)
     VALUES (${spec.storeId}, ${spec.batchId ?? null}, ${spec.module}, ${spec.kind},
             ${spec.runAt}, ${spec.dedupeKey}, ${spec.cancelKey ?? null},
-            ${sql.json(spec.payload ?? {})}, ${spec.state ?? 'pending'})
+            ${sql.json((spec.payload ?? {}) as unknown as Json)}, ${spec.state ?? 'pending'})
     ON CONFLICT (dedupe_key) DO NOTHING
     RETURNING id`
   return row ? Number(row.id) : null
