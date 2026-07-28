@@ -109,5 +109,37 @@ describe('TnClient', () => {
       await client(f as unknown as typeof fetch, 999).put('/products/1', { published: false })
       expect(f).toHaveBeenCalledTimes(1)
     })
+
+    it('atrapa una escritura que esquiva request() y llama a raw() directo, como haría un futuro patch()', async () => {
+      process.env.NODE_ENV = 'test'
+      process.env.TNT_DEMO_STORE_ID = '999'
+      const f = vi.fn().mockResolvedValue(ok({}))
+      const c = client(f as unknown as typeof fetch, 123)
+      // simula un patch() escrito como listAll(): llama a raw() directo, sin pasar por request()
+      const bypass = c as unknown as {
+        raw<T>(method: string, url: string, body: unknown): Promise<{ data: T; next?: string }>
+      }
+      await expect(bypass.raw('PATCH', 'https://api.tiendanube.com/v1/123/products/1', { foo: 'bar' }))
+        .rejects.toThrow(/tienda 123/)
+      expect(f).not.toHaveBeenCalled()
+    })
+
+    it('rechaza cualquier escritura en test si TNT_DEMO_STORE_ID no está definida (falla cerrado)', async () => {
+      process.env.NODE_ENV = 'test'
+      delete process.env.TNT_DEMO_STORE_ID
+      const f = vi.fn().mockResolvedValue(ok({}))
+      await expect(client(f as unknown as typeof fetch, 0).put('/products/1', { published: false }))
+        .rejects.toThrow(/TNT_DEMO_STORE_ID/)
+      expect(f).not.toHaveBeenCalled()
+    })
+
+    it('las lecturas (GET) siguen andando en test aunque TNT_DEMO_STORE_ID no esté definida', async () => {
+      process.env.NODE_ENV = 'test'
+      delete process.env.TNT_DEMO_STORE_ID
+      const f = vi.fn().mockResolvedValue(ok({ id: 123 }))
+      const res = await client(f as unknown as typeof fetch, 123).get('/store')
+      expect(res).toEqual({ id: 123 })
+      expect(f).toHaveBeenCalledTimes(1)
+    })
   })
 })

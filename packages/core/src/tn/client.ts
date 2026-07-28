@@ -65,27 +65,42 @@ export class TnClient {
     path: string,
     o: { params?: Record<string, string>; body?: unknown },
   ): Promise<T> {
-    this.assertWriteAllowed(method)
     const { data } = await this.raw<T>(method, this.url(path, o.params), o.body)
     return data
   }
 
   /**
    * Escribir sobre una tienda de cliente desde un test es irreversible.
-   * Es un throw, no una convención.
+   * Es un throw, no una convención — vive en raw() para que ningún método
+   * de escritura futuro (patch, delete, un bulk endpoint, lo que sea) pueda
+   * esquivarla llamando a raw() directo, como ya hace listAll() con GET.
+   *
+   * Falla cerrado: si TNT_DEMO_STORE_ID no está definida o no es un entero
+   * positivo, CUALQUIER escritura en test se rechaza — no se asume una demo
+   * en 0. Ninguna tienda real de Tienda Nube tiene store_id 0, pero fallar
+   * abierto ahí sería la única excepción a que todos los defaults de
+   * seguridad de este repo fallan cerrado (dns_verified, backfill, etc).
    */
   private assertWriteAllowed(method: string) {
     if (method === 'GET') return
     if (process.env.NODE_ENV !== 'test') return
-    const demo = Number(process.env.TNT_DEMO_STORE_ID ?? 0)
+
+    const raw = process.env.TNT_DEMO_STORE_ID
+    const demo = raw === undefined ? NaN : Number(raw)
+    if (!Number.isInteger(demo) || demo <= 0) {
+      throw new Error(
+        `NODE_ENV=test: se rechaza ${method}. Falta TNT_DEMO_STORE_ID (o no es un entero ` +
+        `positivo) — sin esa variable ningún test puede escribir en ninguna tienda.`)
+    }
     if (this.opts.storeId !== demo) {
       throw new Error(
         `NODE_ENV=test: se rechaza ${method} sobre la tienda ${this.opts.storeId}. ` +
-        `Los tests solo pueden escribir en la demo (${demo || 'sin definir'}).`)
+        `Los tests solo pueden escribir en la demo (${demo}).`)
     }
   }
 
   private async raw<T>(method: string, url: string, body: unknown): Promise<{ data: T; next?: string }> {
+    this.assertWriteAllowed(method)
     let lastErr: unknown
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       await this.sleep(this.opts.bucket.reserve())
