@@ -5,6 +5,8 @@ if (existsSync('.env')) process.loadEnvFile('.env')
 import { Command } from 'commander'
 import { storeAdd } from './commands/store-add.ts'
 import { storeStatus } from './commands/store-status.ts'
+import { sync } from './commands/sync.ts'
+import { worker } from './commands/worker.ts'
 
 const program = new Command()
 program.name('tnt').description('TN-Torque').version('0.0.0')
@@ -25,6 +27,17 @@ store.command('status [slug]')
   .description('estado de una tienda, o de todas')
   .option('--json', 'salida en JSON')
   .action((slug, opts) => { currentSlug = slug; return storeStatus(slug, opts) })
+
+program.command('sync <slug>')
+  .description('sincroniza productos y variantes, y despacha los eventos')
+  .option('--json', 'salida en JSON')
+  .action((slug, opts) => { currentSlug = slug; return sync(slug, opts) })
+
+program.command('worker')
+  .description('procesa la cola de trabajos')
+  .option('--once', 'un solo tick y sale')
+  .option('--interval <segundos>', 'segundos entre ticks', '60')
+  .action(opts => worker(opts))
 
 try {
   await program.parseAsync()
