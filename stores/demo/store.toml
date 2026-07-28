@@ -5,7 +5,7 @@ timezone = "America/Argentina/Cordoba"
 instance = "torque-pc"
 
 [tiendanube]
-store_id = 0   # ← poner el store_id real de la tienda demo
+store_id = 1000002   # tienda demo de partner
 
 [sending]
 dns_verified = false
