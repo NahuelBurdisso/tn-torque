@@ -21,14 +21,15 @@ export async function sync(slug: string, opts: { json?: boolean }) {
   })
 
   const stats = await syncVariants(sql, client, cfg.tiendanube.store_id)
-  const dispatched = await dispatch(sql, MODULE_REGISTRY, cfg.tiendanube.store_id, {
+  const { dispatched, failed } = await dispatch(sql, MODULE_REGISTRY, cfg.tiendanube.store_id, {
     store: cfg, now: () => new Date(),
   })
 
-  const out = { slug, ...stats, dispatched }
+  const out = { slug, ...stats, dispatched, failed }
   console.log(opts.json
     ? JSON.stringify(out)
     : `${slug}: ${stats.mode} · ${stats.rowsSeen} vistas · ${stats.rowsChanged} cambiadas · ` +
-      `${stats.eventsEmitted} eventos · ${dispatched} despachados`)
+      `${stats.eventsEmitted} eventos · ${dispatched} despachados` +
+      (failed ? ` · ${failed} FALLIDOS (ver event_deliveries)` : ''))
   await sql.end()
 }
