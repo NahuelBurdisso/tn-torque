@@ -36,6 +36,20 @@ export interface HandleResult {
   cancel?: string[]
 }
 
+export interface ModuleSchedule {
+  /**
+   * Cuándo corresponde la próxima corrida. Función pura: el sync no sabe si
+   * el módulo quiere dos veces al día o los lunes.
+   */
+  nextRunAt(now: Date, timezone: string): Date
+  /**
+   * Clave estable de esa corrida. DEBE derivarse del `runAt` resuelto, no de
+   * la fecha: con dos corridas diarias, una clave por día haría que la de la
+   * tarde nunca se cree y el digest de las 18:00 no exista jamás, sin error.
+   */
+  dedupe(slug: string, runAt: Date, timezone: string): string
+}
+
 export interface TntModule {
   name: string
   /** Tipos de evento que consume. El despachador filtra por esto. */
@@ -50,4 +64,6 @@ export interface TntModule {
   handle(event: TntEvent, ctx: ModuleContext): HandleResult
   /** El único lugar con efectos. */
   execute(job: Job, ctx: ExecuteContext): Promise<void>
+  /** Presente solo en los módulos agendados. Los reactivos lo omiten. */
+  schedule?: ModuleSchedule
 }
