@@ -19,10 +19,14 @@ export function waLink(phoneDigits: string, text: string): string {
 
 function invite(cart: DigestCart, storeName: string): string {
   const first = (cart.name ?? '').trim().split(/\s+/)[0] || 'Hola'
-  const what = cart.items[0]?.productName ?? 'tu compra'
-  return `Hola ${first}! Te escribo de ${storeName} 🙂 Vi que quedó ` +
-         `${what} en tu carrito. ¿Te ayudo a terminar la compra?` +
-         (cart.resumeUrl ? ` Acá lo retomás: ${cart.resumeUrl}` : '')
+  const firstItem = cart.items[0]
+  const what = firstItem?.productName ?? 'tu compra'
+  // Nombra la variante cuando existe: sin ella, "el Sweater" es ambiguo entre
+  // los talles que están en stock y los que no, y la dueña tiene que preguntar.
+  const variant = firstItem?.variantLabel ? ` (${firstItem.variantLabel})` : ''
+  return `Hola ${first}! Soy de ${storeName} 🙂 Vi que te quedó el ` +
+         `${what}${variant} en el carrito. ¿Te ayudo a terminarlo?` +
+         (cart.resumeUrl ? ` Lo retomás acá: ${cart.resumeUrl}` : '')
 }
 
 function block(cart: DigestCart, storeName: string, now: Date): string {

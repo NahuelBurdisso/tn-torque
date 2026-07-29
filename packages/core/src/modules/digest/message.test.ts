@@ -78,4 +78,19 @@ describe('buildDigest', () => {
     const d = buildDigest({ storeName: 'ACME', carts: [cart()], now: NOW })
     expect(d!.body).toContain('Sweater Sol de Mayo (L/XL)')
   })
+
+  it('nombra la variante en el texto pre-escrito del wa.me', () => {
+    const d = buildDigest({ storeName: 'ACME', carts: [cart()], now: NOW })
+    const link = d!.body.match(/https:\/\/wa\.me\/\S+/)![0]
+    expect(decodeURIComponent(link)).toContain('Sweater Sol de Mayo (L/XL)')
+  })
+
+  it('sin variantLabel no deja paréntesis vacíos en el texto pre-escrito', () => {
+    const d = buildDigest({ storeName: 'ACME', carts: [cart({
+      items: [{ productName: 'Sweater Sol de Mayo', variantLabel: null, quantity: 1, inStock: true }] })], now: NOW })
+    const link = d!.body.match(/https:\/\/wa\.me\/\S+/)![0]
+    const decoded = decodeURIComponent(link)
+    expect(decoded).not.toContain('()')
+    expect(decoded).not.toContain('(null)')
+  })
 })
