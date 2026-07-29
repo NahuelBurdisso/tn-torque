@@ -8,11 +8,22 @@ const ModuleCfg = z.object({
   mode: z.enum(['approval', 'auto']).default('approval'),
 }).passthrough()
 
+const isValidTimezone = (tz: string): boolean => {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz })
+    return true
+  } catch {
+    return false
+  }
+}
+
 export const StoreConfigSchema = z.object({
   store: z.object({
     slug: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'slug debe ser kebab-case'),
     name: z.string().min(1),
-    timezone: z.string().min(1),
+    timezone: z.string().min(1).refine(isValidTimezone, {
+      message: 'zona horaria desconocida — usá un identificador IANA, p. ej. America/Argentina/Cordoba',
+    }),
     instance: z.string().min(1),
   }),
   tiendanube: z.object({

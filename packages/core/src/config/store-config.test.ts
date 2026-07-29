@@ -56,4 +56,13 @@ store_id = 1
   it('rechaza un mode desconocido', () => {
     expect(() => parseStoreConfig(valid.replace('"auto"', '"turbo"'))).toThrow()
   })
+
+  it('rechaza una zona horaria inexistente', () => {
+    expect(() => parseStoreConfig(valid.replace('"America/Argentina/Cordoba"', '"Marte/Olympus"')))
+      .toThrow(/zona horaria/i)
+  })
+
+  it('acepta una zona horaria válida', () => {
+    expect(parseStoreConfig(valid).store.timezone).toBe('America/Argentina/Cordoba')
+  })
 })
