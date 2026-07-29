@@ -30,8 +30,14 @@ export async function syncVariants(sql: Db, client: TnClient, storeId: number): 
     await stageProducts(sql, runId, storeId, products)
     await stageVariants(sql, runId, storeId, variants)
 
-    await applyProducts(sql, runId, storeId)
-    const stats = await applyVariants(sql, runId, storeId, mode)
+    const stats = await sql.begin(async tx => {
+      // Serializa toda la corrida por tienda. Antes vivía dentro de
+      // applyVariants; con un segundo apply en la misma corrida ya no
+      // alcanzaba, así que subió a cubrir todos los applies de la corrida.
+      await tx`SELECT pg_advisory_xact_lock(${storeId})`
+      await applyProducts(tx, runId, storeId)
+      return applyVariants(tx, runId, storeId, mode)
+    })
     await finishRun(sql, runId, stats)
 
     if (mode === 'backfill') await markBackfilled(sql, storeId)

@@ -26,22 +26,36 @@ const variant = (id: number, stock: number | null) => ({
 
 describe('applyVariants — carrera entre dos syncs concurrentes', () => {
   it('dos detecciones independientes de la misma transición 0->5 emiten UN solo evento', async () => {
-    // baseline: la variante arranca en 0 (backfill, no emite)
+    // baseline: la variante arranca en 0 (backfill, no emite). applyVariants
+    // ya no abre transacción propia ni toma el lock (eso subió a nivel de
+    // corrida, ver run-sync.ts) — así que el caller se lo provee.
     const backfillRun = await startRun(sql, STORE, 'variants', 'backfill')
     await stageVariants(sql, backfillRun, STORE, [variant(100, 0)])
-    await applyVariants(sql, backfillRun, STORE, 'backfill')
+    await sql.begin(async tx => {
+      await tx`SELECT pg_advisory_xact_lock(${STORE})`
+      await applyVariants(tx, backfillRun, STORE, 'backfill')
+    })
 
     // dos corridas de sync independientes (dos conexiones), cada una staggea
     // la MISMA transición 0 -> 5 para la misma variante, como pasaría si un
-    // cron se solapa con una corrida manual sobre la misma tienda.
+    // cron se solapa con una corrida manual sobre la misma tienda. Cada una
+    // reproduce el arreglo de producción: abre su propia transacción y toma
+    // el lock por tienda ANTES de aplicar — eso es lo que ahora serializa,
+    // no applyVariants.
     const runA = await startRun(sqlA, STORE, 'variants', 'incremental')
     const runB = await startRun(sqlB, STORE, 'variants', 'incremental')
     await stageVariants(sqlA, runA, STORE, [variant(100, 5)])
     await stageVariants(sqlB, runB, STORE, [variant(100, 5)])
 
     const [statsA, statsB] = await Promise.all([
-      applyVariants(sqlA, runA, STORE, 'incremental'),
-      applyVariants(sqlB, runB, STORE, 'incremental'),
+      sqlA.begin(async tx => {
+        await tx`SELECT pg_advisory_xact_lock(${STORE})`
+        return applyVariants(tx, runA, STORE, 'incremental')
+      }),
+      sqlB.begin(async tx => {
+        await tx`SELECT pg_advisory_xact_lock(${STORE})`
+        return applyVariants(tx, runB, STORE, 'incremental')
+      }),
     ])
 
     // Una restock real. Un solo evento — sin importar cuál corrida "ganó".
