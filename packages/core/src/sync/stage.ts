@@ -1,4 +1,4 @@
-import type { Db, Json } from '@tnt/db'
+import type { Db, Json, Queryable } from '@tnt/db'
 
 /** Forma cruda de una variante tal como la devuelve la API de TN. */
 export interface RawVariant {
@@ -66,4 +66,34 @@ export async function stageProducts(
     tn_updated_at: p.updated_at ?? null,
   }))
   await sql`INSERT INTO stage_products ${sql(values, 'run_id', 'store_id', 'id', 'raw', 'tn_updated_at')}`
+}
+
+/** Forma cruda de un checkout tal como lo devuelve la API de TN. */
+export interface RawCheckout {
+  id: number
+  token: string
+  created_at?: string
+  updated_at?: string
+  [k: string]: unknown
+}
+
+export async function stageCheckouts(
+  sql: Queryable, runId: number, storeId: number, rows: RawCheckout[],
+): Promise<void> {
+  if (!rows.length) return
+
+  // Mismo criterio que stageVariants: la paginación por número de página de TN
+  // puede repetir filas entre páginas, y un duplicado abortaría el upsert entero.
+  const unique = [...new Map(rows.map(c => [c.id, c])).values()]
+
+  const values = unique.map(c => ({
+    run_id: runId,
+    store_id: storeId,
+    id: c.id,
+    token: c.token,
+    raw: sql.json(c as unknown as Json),
+    tn_created_at: c.created_at ?? null,
+    tn_updated_at: c.updated_at ?? null,
+  }))
+  await sql`INSERT INTO stage_checkouts ${sql(values, 'run_id', 'store_id', 'id', 'token', 'raw', 'tn_created_at', 'tn_updated_at')}`
 }
