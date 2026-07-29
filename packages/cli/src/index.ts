@@ -7,6 +7,7 @@ import { storeAdd } from './commands/store-add.ts'
 import { storeStatus } from './commands/store-status.ts'
 import { sync } from './commands/sync.ts'
 import { worker } from './commands/worker.ts'
+import { digest } from './commands/digest.ts'
 
 const program = new Command()
 program.name('tnt').description('TN-Torque').version('0.0.0')
@@ -38,6 +39,12 @@ program.command('worker')
   .option('--once', 'un solo tick y sale')
   .option('--interval <segundos>', 'segundos entre ticks', '60')
   .action(opts => worker(opts))
+
+program.command('digest <slug>')
+  .description('imprime el digest sin mandarlo')
+  .option('--from-mirror', 'arma desde el espejo en vez de los eventos (no es producción)')
+  .option('--window <horas>', 'ventana en horas', '12')
+  .action((slug, opts) => { currentSlug = slug; return digest(slug, opts) })
 
 try {
   await program.parseAsync()

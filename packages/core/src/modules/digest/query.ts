@@ -59,6 +59,38 @@ export async function cartsForDigest(
       AND c.gone_at IS NULL
     ORDER BY c.tn_updated_at DESC`
 
+  return assembleCarts(sql, storeId, rows)
+}
+
+/**
+ * Igual que cartsForDigest pero leyendo el espejo directo, sin pasar por
+ * eventos. SOLO para el ensayo: el guardia de arranque en frío impide que una
+ * tienda ya sincronizada tenga eventos por su backlog, así que un ensayo por
+ * la vía de producción imprimiría vacío. Comparte la redacción, no la tubería.
+ */
+export async function cartsFromMirror(
+  sql: Queryable, storeId: number, windowHours: number, now = new Date(),
+): Promise<DigestCart[]> {
+  const since = new Date(now.getTime() - windowHours * 3_600_000)
+  const rows = await sql<Row[]>`
+    SELECT c.id             AS checkout_id,
+           c.contact_name   AS name,
+           c.contact_phone  AS phone,
+           c.contact_email  AS email,
+           c.total,
+           c.tn_updated_at  AS abandoned_at,
+           c.resume_url,
+           COALESCE(c.raw->'products', '[]'::jsonb) AS products
+    FROM checkouts c
+    WHERE c.store_id = ${storeId}
+      AND c.gone_at IS NULL
+      AND c.tn_updated_at >= ${since}
+    ORDER BY c.tn_updated_at DESC`
+  return assembleCarts(sql, storeId, rows)
+}
+
+/** El agrupado por persona compartido por cartsForDigest y cartsFromMirror. */
+async function assembleCarts(sql: Queryable, storeId: number, rows: Row[]): Promise<DigestCart[]> {
   if (!rows.length) return []
 
   const variantIds = [...new Set(
