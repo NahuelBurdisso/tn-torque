@@ -13,7 +13,7 @@ import { enqueue } from '../queue/queue.ts'
  */
 export async function ensureScheduledJobs(
   sql: Queryable,
-  modules: TntModule[],
+  modules: readonly TntModule[],
   storeId: number,
   cfg: StoreConfig,
   now: Date,

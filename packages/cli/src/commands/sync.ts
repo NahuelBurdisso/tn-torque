@@ -1,6 +1,6 @@
 import { db, migrate } from '@tnt/db'
 import {
-  loadStoreConfig, keyFromEnv, storeToken, TnClient, TokenBucket, syncVariants,
+  loadStoreConfig, keyFromEnv, storeToken, TnClient, TokenBucket, syncStore,
   dispatch, MODULE_REGISTRY, getStore,
 } from '@tnt/core'
 
@@ -20,7 +20,7 @@ export async function sync(slug: string, opts: { json?: boolean }) {
     bucket: new TokenBucket({ capacity: 40, refillPerSec: 2 }),
   })
 
-  const stats = await syncVariants(sql, client, cfg.tiendanube.store_id)
+  const stats = await syncStore(sql, client, cfg.tiendanube.store_id, cfg)
   const { dispatched, failed } = await dispatch(sql, MODULE_REGISTRY, cfg.tiendanube.store_id, {
     store: cfg, now: () => new Date(),
   })
@@ -29,7 +29,8 @@ export async function sync(slug: string, opts: { json?: boolean }) {
   console.log(opts.json
     ? JSON.stringify(out)
     : `${slug}: ${stats.mode} · ${stats.rowsSeen} vistas · ${stats.rowsChanged} cambiadas · ` +
-      `${stats.eventsEmitted} eventos · ${dispatched} despachados` +
+      `${stats.eventsEmitted} eventos · ${stats.checkouts.rowsSeen} checkouts · ` +
+      `${stats.scheduled} agendados · ${dispatched} despachados` +
       (failed ? ` · ${failed} FALLIDOS (ver event_deliveries)` : ''))
   await sql.end()
 }
