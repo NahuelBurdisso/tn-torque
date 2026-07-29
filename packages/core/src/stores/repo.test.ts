@@ -39,11 +39,23 @@ describe('store repo', () => {
 
   it('marca needs_reauth', async () => {
     await upsertStore(sql, cfg, { accessToken: 't', scope: 's' }, key)
-    await markNeedsReauth(sql, 777)
+    await markNeedsReauth(sql, 777, 'demo')
     expect((await getStore(sql, 'demo'))!.state).toBe('needs_reauth')
   })
 
   it('storeToken falla si la tienda no existe', async () => {
     await expect(storeToken(sql, 'fantasma', key)).rejects.toThrow(/fantasma/)
+  })
+
+  it('markNeedsReauth cancela los trabajos pendientes de esa tienda', async () => {
+    await upsertStore(sql, cfg, { accessToken: 't', scope: 's' }, key)
+    await sql`INSERT INTO jobs (store_id, module, kind, run_at, dedupe_key, cancel_key, state)
+              VALUES (777, 'digest', 'scheduled', now(), 'd1', 'store:demo', 'pending'),
+                     (777, 'digest', 'scheduled', now(), 'd2', 'store:demo', 'done')`
+    await markNeedsReauth(sql, 777, 'demo')
+    const rows = await sql<{ dedupe_key: string; state: string }[]>`
+      SELECT dedupe_key, state FROM jobs ORDER BY dedupe_key`
+    expect(rows[0]!.state).toBe('cancelled')
+    expect(rows[1]!.state).toBe('done')     // lo que ya corrió no se toca
   })
 })

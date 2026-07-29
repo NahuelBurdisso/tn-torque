@@ -1,6 +1,7 @@
 import type { Db } from '@tnt/db'
 import { seal, open } from '../crypto/secret-box.ts'
 import type { StoreConfig } from '../config/store-config.ts'
+import { cancelByKey } from '../queue/queue.ts'
 
 export interface StoreRow {
   id: number
@@ -58,8 +59,14 @@ export async function storeToken(sql: Db, slug: string, key: Buffer): Promise<st
   return open(row.access_token_sealed, key)
 }
 
-export async function markNeedsReauth(sql: Db, storeId: number): Promise<void> {
+/**
+ * Un 401 significa token revocado. Además de frenar los syncs hay que matar
+ * los trabajos pendientes: un digest agendado sobre una tienda muerta mandaría
+ * datos viejos sin ninguna señal de que lo son.
+ */
+export async function markNeedsReauth(sql: Db, storeId: number, slug: string): Promise<void> {
   await sql`UPDATE stores SET state = 'needs_reauth', updated_at = now() WHERE id = ${storeId}`
+  await cancelByKey(sql, `store:${slug}`)
 }
 
 export async function markBackfilled(sql: Db, storeId: number): Promise<void> {

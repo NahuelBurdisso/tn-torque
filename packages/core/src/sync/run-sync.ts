@@ -67,7 +67,7 @@ export async function syncStore(
     await sql`DELETE FROM stage_variants  WHERE run_id = ${runId}`
     await sql`DELETE FROM stage_products  WHERE run_id = ${runId}`
     await sql`DELETE FROM stage_checkouts WHERE run_id = ${runId}`
-    if (err instanceof TnHttpError && err.isAuth) await markNeedsReauth(sql, storeId)
+    if (err instanceof TnHttpError && err.isAuth) await markNeedsReauth(sql, storeId, cfg.store.slug)
     throw err
   }
 }
