@@ -17,14 +17,18 @@ export async function startRun(sql: Db, storeId: number, resource: string, mode:
   return Number(row!.id)
 }
 
-export async function finishRun(sql: Db, runId: number, stats: SyncStats, error?: string): Promise<void> {
+export async function finishRun(
+  sql: Db, runId: number, stats: SyncStats,
+  error?: string, checkoutsSeen?: number,
+): Promise<void> {
   await sql`
     UPDATE sync_runs SET
       finished_at    = now(),
       rows_seen      = ${stats.rowsSeen},
       rows_changed   = ${stats.rowsChanged},
       events_emitted = ${stats.eventsEmitted},
-      error          = ${error ?? null}
+      error          = ${error ?? null},
+      checkouts_seen = ${checkoutsSeen ?? null}
     WHERE id = ${runId}`
 }
 
