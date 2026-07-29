@@ -12,7 +12,8 @@ dns_verified = false
 daily_budget = 50
 
 [modules]
-ntfy = { enabled = true, mode = "auto" }
+ntfy   = { enabled = true, mode = "auto" }
+digest = { enabled = true, mode = "auto" }
 
 [brand]
 primary = "#2A211A"
