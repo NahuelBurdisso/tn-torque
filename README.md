@@ -1,5 +1,7 @@
 # TN-Torque
 
+[![CI](https://github.com/NahuelBurdisso/tn-torque/actions/workflows/ci.yml/badge.svg)](https://github.com/NahuelBurdisso/tn-torque/actions/workflows/ci.yml)
+
 A local, multi-store automation runtime for [Tienda Nube / Nuvemshop](https://www.tiendanube.com/) stores.
 
 It mirrors each store's catalog and checkouts into Postgres, **synthesizes the events the platform does not emit** (abandoned checkouts, stock changes), and runs automation modules on top of them — replacing a stack of paid marketplace apps with one process you run yourself.
